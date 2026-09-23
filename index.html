@@ -308,6 +308,7 @@
     border: 1px solid var(--border);
     aspect-ratio: 4 / 3;
     background: var(--dark-card);
+    cursor: zoom-in;
   }
   .realisatie-card img {
     width: 100%; height: 100%; object-fit: cover;
@@ -321,6 +322,67 @@
   .realisatie-card .cap { position: absolute; left: 18px; right: 18px; bottom: 16px; }
   .realisatie-card .cap .tag-sm { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--electric); }
   .realisatie-card .cap .title { margin-top: 4px; font-size: 15px; font-weight: 700; color: #fff; }
+
+  /* ============ LIGHTBOX ============ */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background: rgba(3,5,3,0.94);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0; visibility: hidden;
+    transition: opacity .3s ease, visibility 0s linear .3s;
+  }
+  .lightbox.open {
+    opacity: 1; visibility: visible;
+    transition: opacity .3s ease, visibility 0s linear 0s;
+  }
+  .lightbox-figure {
+    position: relative;
+    max-width: min(1200px, 92vw);
+    max-height: 88vh;
+    display: flex; flex-direction: column; align-items: center;
+    transform: scale(0.94);
+    transition: transform .3s cubic-bezier(0.16,1,0.3,1);
+  }
+  .lightbox.open .lightbox-figure { transform: scale(1); }
+  .lightbox-figure img {
+    max-width: 100%; max-height: 78vh;
+    width: auto; height: auto;
+    border-radius: 14px;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7);
+    border: 1px solid var(--border);
+  }
+  .lightbox-cap { margin-top: 16px; text-align: center; }
+  .lightbox-cap .tag-sm { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--electric); }
+  .lightbox-cap .title { margin-top: 4px; font-size: 16px; font-weight: 700; color: #fff; }
+
+  .lightbox-close {
+    position: absolute; top: -6px; right: -6px;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--border); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color .25s, transform .25s;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.18); transform: rotate(90deg); }
+
+  .lightbox-nav {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--border); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color .25s, transform .25s;
+  }
+  .lightbox-nav:hover { background: rgba(255,255,255,0.18); }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+  @media (max-width: 720px) {
+    .lightbox-nav { width: 40px; height: 40px; }
+    .lightbox-prev { left: 8px; }
+    .lightbox-next { right: 8px; }
+    .lightbox-close { top: -44px; right: 0; }
+  }
 
   /* ============ ABOUT ============ */
   .about-grid { display: grid; grid-template-columns: 1fr; gap: 48px; align-items: start; }
@@ -634,6 +696,26 @@
   </div>
 </section>
 
+<!-- ================= LIGHTBOX ================= -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Foto uitvergroot">
+  <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Vorige foto">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <div class="lightbox-figure">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Sluiten">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <img id="lightbox-img" src="" alt="">
+    <div class="lightbox-cap">
+      <div class="tag-sm" id="lightbox-tag"></div>
+      <div class="title" id="lightbox-title"></div>
+    </div>
+  </div>
+  <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Volgende foto">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</div>
+
 <!-- ================= ABOUT ================= -->
 <section id="over-ons" class="section-pad band">
   <div class="wrap">
@@ -846,6 +928,84 @@
         btn.disabled = false;
         btnLabel.textContent = defaultLabel;
       });
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.realisatie-card'));
+  if (!cards.length) return;
+
+  var lightbox = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lightbox-img');
+  var lbTag = document.getElementById('lightbox-tag');
+  var lbTitle = document.getElementById('lightbox-title');
+  var btnClose = document.getElementById('lightbox-close');
+  var btnPrev = document.getElementById('lightbox-prev');
+  var btnNext = document.getElementById('lightbox-next');
+
+  var current = 0;
+  var lastFocused = null;
+
+  function dataFor(index) {
+    var card = cards[index];
+    var img = card.querySelector('img');
+    return {
+      src: img.getAttribute('src'),
+      alt: img.getAttribute('alt') || '',
+      tag: (card.querySelector('.tag-sm') || {}).textContent || '',
+      title: (card.querySelector('.title') || {}).textContent || ''
+    };
+  }
+
+  function show(index) {
+    current = (index + cards.length) % cards.length;
+    var data = dataFor(current);
+    lbImg.src = data.src;
+    lbImg.alt = data.alt;
+    lbTag.textContent = data.tag;
+    lbTitle.textContent = data.title;
+  }
+
+  function open(index) {
+    lastFocused = document.activeElement;
+    show(index);
+    lightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    btnClose.focus();
+  }
+
+  function close() {
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+    lbImg.src = '';
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+  }
+
+  cards.forEach(function (card, index) {
+    card.addEventListener('click', function () { open(index); });
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', 'Bekijk foto vergroot');
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(index); }
+    });
+  });
+
+  btnClose.addEventListener('click', close);
+  btnPrev.addEventListener('click', function () { show(current - 1); });
+  btnNext.addEventListener('click', function () { show(current + 1); });
+
+  lightbox.addEventListener('click', function (e) {
+    if (e.target === lightbox) close();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!lightbox.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') show(current - 1);
+    else if (e.key === 'ArrowRight') show(current + 1);
   });
 })();
 </script>
